@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ssl-checker-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ssl-checker
+  template:
+    metadata:
+      labels:
+        app: ssl-checker
+    spec:
+      containers:
+        - name: ssl-checker
+          image: ssl-checker:latest
+          imagePullPolicy: IfNotPresent
+          args: []
+          env:
+            - name: SITES_FILE
+              value: /config/sites.txt
+          volumeMounts:
+            - name: sites-volume
+              mountPath: /config
+      volumes:
+        - name: sites-volume
+          configMap:
+            name: ssl-check-sites
