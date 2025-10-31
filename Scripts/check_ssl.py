@@ -5,7 +5,6 @@ Checks SSL/TLS certificate expiry for hosts listed in sites.txt (or overridden b
 Outputs human-readable table and optionally sends alerts (Slack) on thresholds.
 
 Usage:
-  python3 check_ssl.py
 Environment variables (optional):
   SITES_FILE = os.environ.get("SITES_FILE", "sites.txt")
   WARN_DAYS  - days threshold for warning (default: 30)

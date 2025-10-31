@@ -8,3 +8,30 @@ data:
     openai.com
     example.org
     expired.badssl.com:443
+    # Normal, long-valid certs (OK)
+    openai.com
+    google.com
+    example.org
+
+    # Expired cert
+    expired.badssl.com
+
+    # Self-signed / untrusted (may fail but shows error handling)
+    self-signed.badssl.com
+
+    # Wrong hostname in cert
+    wrong.host.badssl.com
+
+    # Expiring soon (less than 30 days)
+    # badssl.com rotates some of these frequently; still good for testing
+    sha1-intermediate.badssl.com
+
+    # Invalid / revoked
+    revoked.badssl.com
+
+    # Expiring intermediate or chain errors
+    incomplete-chain.badssl.com
+
+    # Short-lived certificates (<90 days) – often go WARNING sooner
+    letsencrypt.org
+    api.github.com

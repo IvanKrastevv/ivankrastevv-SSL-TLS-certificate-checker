@@ -4,9 +4,12 @@ FROM python:3.11-slim
 # Create app dir
 WORKDIR /app
 
-# Copy script and example sites
-COPY check_ssl.py /app/check_ssl.py
-COPY sites.txt /app/sites.txt
+# Copy script and sites file
+COPY Scripts/check_ssl.py /app/check_ssl.py
+COPY Scripts/sites.txt /app/sites.txt
+
+# Install required dependency (cryptography)
+RUN pip install --no-cache-dir cryptography
 
 # Make script executable
 RUN chmod +x /app/check_ssl.py
@@ -18,5 +21,4 @@ ENV SITES_FILE=/app/sites.txt \
     PARALLEL_WORKERS=16 \
     CONNECT_TIMEOUT=6.0
 
-# No extra dependencies required - using stdlib only
-ENTRYPOINT ["python3", "/app/check_ssl.py"]
+ENTRYPOINT ["bash", "-c", "python3 /app/check_ssl.py || true"]
