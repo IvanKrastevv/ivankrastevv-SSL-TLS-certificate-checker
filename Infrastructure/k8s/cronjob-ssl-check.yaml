@@ -1,0 +1,33 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ssl-expiry-check
+spec:
+  schedule: "0 6 * * *"   # daily at 06:00
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: ssl-checker
+              image: ssl-checker:latest
+              imagePullPolicy: IfNotPresent
+              env:
+                - name: SITES_FILE
+                  value: /config/sites.txt
+                - name: WARN_DAYS
+                  value: "30"
+                - name: CRIT_DAYS
+                  value: "7"
+                # - name: SLACK_WEBHOOK
+                #   value: "https://hooks.slack.com/services/...."
+              volumeMounts:
+                - name: sites-volume
+                  mountPath: /config
+          volumes:
+            - name: sites-volume
+              configMap:
+                name: ssl-check-sites
