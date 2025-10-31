@@ -2,16 +2,15 @@
 """
 check_ssl.py
 Checks SSL/TLS certificate expiry for hosts listed in sites.txt (or overridden by env/config).
-Outputs human-readable table and optionally sends alerts (Slack/Teams/Email) on thresholds.
+Outputs human-readable table and optionally sends alerts (Slack) on thresholds.
 
 Usage:
   python3 check_ssl.py
 Environment variables (optional):
-  SITES_FILE - path to sites file (default: ./sites.txt)
+  SITES_FILE = os.environ.get("SITES_FILE", "sites.txt")
   WARN_DAYS  - days threshold for warning (default: 30)
   CRIT_DAYS  - days threshold for critical (default: 7)
   SLACK_WEBHOOK - optional Slack webhook URL to send alerts
-  TEAMS_WEBHOOK - optional Slack webhook URL to send alerts
   PARALLEL_WORKERS - number of concurrent workers (default: 16)
 """
 
@@ -19,6 +18,8 @@ import socket
 import ssl
 from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
 import os
 import sys
 import json
@@ -26,11 +27,11 @@ import urllib.request
 import urllib.error
 import traceback
 
+
 SITES_FILE = os.environ.get("SITES_FILE", "sites.txt")
 WARN_DAYS = int(os.environ.get("WARN_DAYS", "30"))
 CRIT_DAYS = int(os.environ.get("CRIT_DAYS", "7"))
 SLACK_WEBHOOK = os.environ.get("SLACK_WEBHOOK", "").strip()
-TEAMS_WEBHOOK = os.environ.get("SLACK_WEBHOOK", "").strip()
 PARALLEL = int(os.environ.get("PARALLEL_WORKERS", "16"))
 CONNECT_TIMEOUT = float(os.environ.get("CONNECT_TIMEOUT", "6.0"))
 
@@ -40,9 +41,8 @@ def read_sites(file_path):
             lines = [ln.strip() for ln in f if ln.strip() and not ln.strip().startswith("#")]
         return lines
     except FileNotFoundError:
-        print(f"[ERROR] File containing URLs not found: {file_path}")
+        print(f"[ERROR] Sites file not found: {file_path}")
         return []
-
 
 def parse_host_port(hostline):
     # Accept hostname or host:port
@@ -58,45 +58,65 @@ def parse_host_port(hostline):
         port = 443
     return host, port
 
-  
-def get_cert_expiry(host, port=443, timeout=CONNECT_TIMEOUT):
+
+def get_cert_expiry(host, port=443, timeout=5):
     """
-    Returns a tuple: (expiry_datetime_utc, subject_dict, issuer_dict)
-    Or raises an exception on failure.
+    Returns a tuple: (expiry_datetime_utc, subject_str, issuer_str)
+    Works on all Python versions (3.9–3.13) and platforms (Windows/Linux/Mac).
     """
     context = ssl.create_default_context()
-    # do not verify to ensure we can fetch even if chain is problematic - still returns cert
+    # allow retrieval even if chain is invalid/expired
     context.check_hostname = False
     context.verify_mode = ssl.CERT_NONE
 
     with socket.create_connection((host, port), timeout=timeout) as sock:
         with context.wrap_socket(sock, server_hostname=host) as ssock:
+            # Try normal parsed form first
             cert = ssock.getpeercert()
-            # getpeercert returns a dict; 'notAfter' like 'Jun 10 12:00:00 2026 GMT'
-            not_after = cert.get('notAfter')
+            not_after = cert.get("notAfter") if cert else None
+
             if not not_after:
-                raise ValueError("Certificate missing 'notAfter'")
+                # Fallback: use raw DER and parse via cryptography
+                der_cert = ssock.getpeercert(binary_form=True)
+                if not der_cert:
+                    raise ValueError("Could not retrieve certificate in binary form")
+
+                x509_cert = x509.load_der_x509_certificate(der_cert, default_backend())
+                expiry = x509_cert.not_valid_after_utc
+                subject = x509_cert.subject.rfc4514_string()
+                issuer = x509_cert.issuer.rfc4514_string()
+                return expiry, subject, issuer
+
+            # Normal parse path
             try:
                 expiry = datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z")
             except Exception:
-                # fallback without timezone parse (robustness)
                 expiry = datetime.strptime(not_after, "%b %d %H:%M:%S %Y")
-            # treat as UTC/GMT
             expiry = expiry.replace(tzinfo=timezone.utc)
+
             subject = cert.get("subject", ())
             issuer = cert.get("issuer", ())
             return expiry, subject, issuer
 
-
-def human_subject(subject_tuple):
-    # Convert subject tuple list to readable dict
-    try:
+def human_subject(subject):
+    """
+    Converts subject info (tuple or RFC4514 string) to a dict.
+    Handles both stdlib and cryptography formats.
+    """
+    if isinstance(subject, str):
         d = {}
-        for item in subject_tuple:
+        for part in subject.split(","):
+            if "=" in part:
+                k, v = part.strip().split("=", 1)
+                d[k] = v
+        return d
+    elif isinstance(subject, (tuple, list)):
+        d = {}
+        for item in subject:
             for (k, v) in item:
                 d[k] = v
         return d
-    except Exception:
+    else:
         return {}
 
 
@@ -115,11 +135,10 @@ def format_line(hostline, result):
         status = "WARNING"
     return f"{hostline} - Expires: {expiry_dt.strftime('%Y-%m-%d %H:%M:%S %Z')} ({days_left} days) - {status}"
 
-
-def sending_alerts(results):
+def maybe_alert_alerts(results):
     """
-    If webhooks are set are set, sends one summary alert listing CRITICAL/WARNING items.
-    Simple text payload for Slack/Teams incoming webhook (blocks not used to keep dependency-free).
+    If SLACK_WEBHOOK is set, sends one summary alert listing CRITICAL/WARNING items.
+    Simple text payload for Slack incoming webhook (blocks not used to keep dependency-free).
     """
     if not SLACK_WEBHOOK:
         return
@@ -152,7 +171,6 @@ def sending_alerts(results):
         text_lines.extend(f"• {w}" for w in warnings)
 
     payload = json.dumps({"text": "\n".join(text_lines)}).encode("utf-8")
-    #Slack
     try:
         req = urllib.request.Request(SLACK_WEBHOOK, data=payload,
                                      headers={"Content-Type": "application/json"})
@@ -161,16 +179,6 @@ def sending_alerts(results):
             print(f"[ALERT] Slack webhook response: {status}")
     except Exception as e:
         print(f"[ALERT ERROR] Failed to send Slack webhook: {e}")
-    #Teams
-    try:
-        req = urllib.request.Request(TEAMS_WEBHOOK, data=payload,
-                                     headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            status = resp.getcode()
-            print(f"[ALERT] Teams webhook response: {status}")
-    except Exception as e:
-        print(f"[ALERT ERROR] Failed to send Teams webhook: {e}")
-
 
 def check_all(sites):
     results = {}
@@ -196,7 +204,6 @@ def check_all(sites):
                 results[site] = e
     return results
 
-  
 def print_summary(results):
     print("----- SSL Certificate Expiry Summary -----")
     for site, res in results.items():
@@ -217,7 +224,6 @@ def print_summary(results):
             print(f"{site} | CN={cn} | Expires={expiry.strftime('%Y-%m-%d %H:%M:%S %Z')} | DaysLeft={days} | {status}")
     print("------------------------------------------")
 
-
 def main():
     sites = read_sites(SITES_FILE)
     if not sites:
@@ -225,7 +231,7 @@ def main():
     results = check_all(sites)
     print_summary(results)
     # optionally alert
-    sending_alerts(results)
+    maybe_alert_alerts(results)
     # exit code: 2 if any critical/expired, 1 if any warning, 0 otherwise
     exit_code = 0
     for res in results.values():
