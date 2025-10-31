@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ssl-check-sites
+data:
+  sites.txt: |
+    google.com
+    openai.com
+    example.org
+    expired.badssl.com:443
