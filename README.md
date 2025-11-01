@@ -98,9 +98,9 @@ This runs the job daily at 06:00 by default.
 - kubectl get jobs --watch
 - kubectl logs job/<job-name>
 - kubectl logs <job-pod-name>
--- for debug if needed
+For debug if needed
 - kubectl exec -it ssl-expiry-run-26nwt -- cat /app/sites.txt
--kubectl get events (-n namespace) - provide namespace if not working in the 'default' namespace
+- kubectl get events (-n namespace) - provide namespace if not working in the 'default' namespace
 
 To trigger it immediately:
 
@@ -110,9 +110,9 @@ To trigger it immediately:
 
 Important - if you do any changes to the Dockerfile, configmap, cronjob file, deployment file and you are running on a local minikube. 
 
-- if Dockerfile is changed - it needs to be rebuild, load it manually if needed and make sure the cronjob cronjob and job use the new file.
--- docker build -t ssl-checker:latest -f Infrastructure/checker.Dockerfile . - then test the job again - you can run <docker images> to check the new image is created based on the age
-- if configmap is edited when doing this in minukube you need to apply the file.
--- kubectl apply -f Infrastructure/k8s/configmap-sites.yaml - then the cronjob will use the new configmap.
-- if you change the deploy or the cronjob file the same should be done.
--- kubectl apply -f Infrastructure/k8s/cronjob-ssl-check.yaml
+If Dockerfile is changed - it needs to be rebuild, load it manually if needed and make sure the cronjob cronjob and job use the new file.
+- docker build -t ssl-checker:latest -f Infrastructure/checker.Dockerfile . - then test the job again - you can run <docker images> to check the new image is created based on the age
+If configmap is edited when doing this in minukube you need to apply the file.
+- kubectl apply -f Infrastructure/k8s/configmap-sites.yaml - then the cronjob will use the new configmap.
+If you change the deploy or the cronjob file the same should be done.
+- kubectl apply -f Infrastructure/k8s/cronjob-ssl-check.yaml
