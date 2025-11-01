@@ -94,18 +94,18 @@ kubectl apply -f k8s/cronjob-ssl-check.yaml
 This runs the job daily at 06:00 by default.
 
 5. View results
-kubectl get cronjob
-kubectl get jobs --watch
-kubectl logs job/<job-name>
-kubectl logs <job-pod-name>
-- for debug if needed
-kubectl exec -it ssl-expiry-run-26nwt -- cat /app/sites.txt
-kubectl get events (-n namespace) - provide namespace if not working in the 'default' namespace
+- kubectl get cronjob
+- kubectl get jobs --watch
+- kubectl logs job/<job-name>
+- kubectl logs <job-pod-name>
+-- for debug if needed
+- kubectl exec -it ssl-expiry-run-26nwt -- cat /app/sites.txt
+-kubectl get events (-n namespace) - provide namespace if not working in the 'default' namespace
 
 To trigger it immediately:
 
-kubectl create job --from=cronjob/ssl-expiry-check ssl-expiry-manual-<name>
-kubectl logs -f job/ssl-expiry-manual-<name>
+- kubectl create job --from=cronjob/ssl-expiry-check ssl-expiry-manual-<name>
+- kubectl logs -f job/ssl-expiry-manual-<name>
 
 
 Important - if you do any changes to the Dockerfile, configmap, cronjob file, deployment file and you are running on a local minikube. 
