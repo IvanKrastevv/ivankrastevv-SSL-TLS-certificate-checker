@@ -30,9 +30,9 @@ For each site:
 - Retrieves the SSL certificate.
 - Parses the notAfter field to determine expiration date - if cert structure contains 'notAfter' or using the cryptography package we decode the raw DER-encoded certificate and extract the not_valid_after field.
 Displays each site’s expiration info, days left, and status:
-✅ OK — more than WARN_DAYS left
-⚠️ WARNING — less than WARN_DAYS
-🔴 CRITICAL / EXPIRED — less than CRIT_DAYS or expired
+- ✅ OK — more than WARN_DAYS left
+- ⚠️ WARNING — less than WARN_DAYS
+- 🔴 CRITICAL / EXPIRED — less than CRIT_DAYS or expired
 Optionally sends a summary message to Slack via SLACK_WEBHOOK.
 - if K8s is being used all these can be overwritten in the configmap - easy way for testing - real production ready approach should have a bit more flexibility.
 
